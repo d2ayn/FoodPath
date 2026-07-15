@@ -1,0 +1,2651 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>FoodPath | 지역 맛집 최단경로</title>
+
+  <style>
+    :root {
+      --background: #f4f7fb;
+      --card: #ffffff;
+      --text: #182033;
+      --sub-text: #667085;
+      --line: #dce3ee;
+
+      --primary: #174ea6;
+      --primary-light: #eaf1ff;
+
+      --restaurant: #f97316;
+      --parking: #2563eb;
+      --start: #16a34a;
+
+      --node: #a50046;
+      --route: #e11d48;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+
+      font-family:
+        Arial,
+        "Noto Sans KR",
+        sans-serif;
+
+      color: var(--text);
+      background: var(--background);
+    }
+
+    header {
+      padding: 20px 24px;
+
+      color: white;
+      background: #111827;
+    }
+
+    header h1 {
+      margin: 0;
+
+      font-size: 25px;
+    }
+
+    header p {
+      margin: 7px 0 0;
+
+      color: #cbd5e1;
+      font-size: 14px;
+    }
+
+    main {
+      display: grid;
+
+      grid-template-columns:
+        minmax(0, 1.65fr)
+        minmax(330px, 0.75fr);
+
+      gap: 18px;
+
+      width: min(1550px, 100%);
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+
+      background: var(--card);
+
+      box-shadow:
+        0 8px 24px
+        rgba(15, 23, 42, 0.07);
+    }
+
+    /* =========================
+       지도 영역
+    ========================= */
+
+    .map-panel {
+      padding: 12px;
+    }
+
+    .map-wrap {
+      position: relative;
+
+      width: 100%;
+
+      overflow: hidden;
+
+      border-radius: 12px;
+      background: #edf1f6;
+
+      aspect-ratio: 16 / 10;
+    }
+
+    .map-wrap img {
+      display: block;
+
+      width: 100%;
+      height: 100%;
+
+      object-fit: cover;
+    }
+
+    /*
+      경로선을 그리는 SVG.
+      viewBox는 1000 × 625 기준.
+    */
+    .route-svg {
+      position: absolute;
+      inset: 0;
+
+      width: 100%;
+      height: 100%;
+
+      pointer-events: none;
+    }
+
+    .road-line {
+      fill: none;
+
+      stroke: rgba(165, 0, 70, 0.28);
+      stroke-width: 4;
+
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .selected-route {
+      fill: none;
+
+      stroke: var(--route);
+      stroke-width: 8;
+
+      stroke-linecap: round;
+      stroke-linejoin: round;
+
+      filter:
+        drop-shadow(
+          0 2px 3px
+          rgba(0, 0, 0, 0.22)
+        );
+    }
+
+    /* =========================
+       지도 마커
+    ========================= */
+
+    .marker {
+      position: absolute;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      transform: translate(-50%, -50%);
+
+      border: 3px solid white;
+      border-radius: 50%;
+
+      color: white;
+      font-size: 12px;
+      font-weight: 800;
+
+      cursor: pointer;
+
+      box-shadow:
+        0 3px 11px
+        rgba(0, 0, 0, 0.28);
+
+      user-select: none;
+    }
+
+    .marker.food {
+      width: 31px;
+      height: 31px;
+
+      background: var(--restaurant);
+    }
+
+    .marker.parking {
+      width: 31px;
+      height: 31px;
+
+      background: var(--parking);
+    }
+
+    .marker.start {
+      width: 38px;
+      height: 38px;
+
+      background: var(--start);
+    }
+
+    /*
+      교차로 노드.
+      기본값에서는 화면에 보이게 만들어 둠.
+      나중에 숨기고 싶으면 display:none 가능.
+    */
+    .marker.node {
+      width: 25px;
+      height: 25px;
+
+      border-width: 2px;
+
+      background: var(--node);
+
+      font-size: 11px;
+    }
+
+    .marker:hover {
+      z-index: 20;
+
+      transform:
+        translate(-50%, -50%)
+        scale(1.15);
+    }
+
+    /* =========================
+       오른쪽 제어 패널
+    ========================= */
+
+    .side-panel {
+      padding: 18px;
+    }
+
+    .side-panel h2 {
+      margin: 0 0 15px;
+
+      font-size: 19px;
+    }
+
+    .field {
+      margin-bottom: 15px;
+    }
+
+    label.title {
+      display: block;
+
+      margin-bottom: 7px;
+
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    select,
+    button {
+      width: 100%;
+
+      padding: 11px 12px;
+
+      border: 1px solid var(--line);
+      border-radius: 10px;
+
+      font-size: 14px;
+    }
+
+    select {
+      color: var(--text);
+      background: white;
+    }
+
+    button {
+      border: none;
+
+      color: white;
+      background: var(--primary);
+
+      font-weight: 800;
+
+      cursor: pointer;
+    }
+
+    button:hover {
+      filter: brightness(0.95);
+    }
+
+    button.secondary {
+      margin-top: 9px;
+
+      color: #3730a3;
+      background: #eef2ff;
+    }
+
+    .checks {
+      display: grid;
+
+      grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+      gap: 8px;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: center;
+
+      gap: 7px;
+
+      padding: 9px;
+
+      border: 1px solid var(--line);
+      border-radius: 9px;
+
+      font-size: 12px;
+    }
+
+    .check-item input {
+      accent-color: var(--primary);
+    }
+
+    /* =========================
+       결과 카드
+    ========================= */
+
+    .result {
+      margin-top: 18px;
+      padding-top: 17px;
+
+      border-top: 1px solid var(--line);
+    }
+
+    .result-card {
+      margin-bottom: 10px;
+      padding: 13px;
+
+      border: 1px solid var(--line);
+      border-radius: 12px;
+
+      background: #fbfcff;
+    }
+
+    .result-card strong {
+      display: block;
+
+      margin-bottom: 7px;
+    }
+
+    .meta {
+      color: var(--sub-text);
+
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .menu {
+      margin-top: 9px;
+      padding-top: 9px;
+
+      border-top: 1px dashed var(--line);
+
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .badge {
+      display: inline-block;
+
+      padding: 3px 7px;
+
+      border-radius: 999px;
+
+      color: #c2410c;
+      background: #fff7ed;
+
+      font-size: 11px;
+    }
+
+    .route-list {
+      margin: 9px 0 0;
+      padding-left: 20px;
+
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .note {
+      margin-top: 14px;
+
+      color: var(--sub-text);
+
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .map-wrap {
+        aspect-ratio: 4 / 3;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <h1>FoodPath</h1>
+
+    <p>
+      세종고등학교 주변 맛집 추천 및
+      실제 도로 기반 최단경로 안내
+    </p>
+  </header>
+
+  <main>
+
+    <!-- =========================
+         지도
+    ========================== -->
+
+    <section class="panel map-panel">
+
+      <div
+        class="map-wrap"
+        id="mapWrap"
+      >
+
+        <!--
+          두 번째로 보낸 깨끗한 지도 사진을
+          map.jpg라는 이름으로 저장
+        -->
+        <img
+          src="map.jpg"
+          alt="세종고등학교 주변 지도"
+        >
+
+        <!-- 도로와 최단경로 표시 -->
+        <svg
+          class="route-svg"
+          viewBox="0 0 1000 625"
+          preserveAspectRatio="none"
+        >
+
+          <!-- 모든 도로를 연하게 표시 -->
+          <g id="roadLayer"></g>
+
+          <!-- 선택된 최단경로 -->
+          <polyline
+            id="routeLine"
+            class="selected-route"
+            points=""
+          ></polyline>
+
+        </svg>
+
+      </div>
+
+    </section>
+
+    <!-- =========================
+         조건 선택
+    ========================== -->
+
+    <aside class="panel side-panel">
+
+      <h2>맛집 추천 조건</h2>
+
+      <div class="field">
+
+        <label
+          class="title"
+          for="start"
+        >
+          출발지
+        </label>
+
+        <select id="start">
+          <option value="school">
+            세종고등학교
+          </option>
+        </select>
+
+      </div>
+
+      <div class="field">
+
+        <label
+          class="title"
+          for="category"
+        >
+          음식 종류
+        </label>
+
+        <select id="category">
+
+          <option value="전체">
+            전체
+          </option>
+
+          <option value="중식">
+            중식
+          </option>
+
+          <option value="분식">
+            분식
+          </option>
+
+          <option value="면요리">
+            면요리
+          </option>
+
+          <option value="국밥">
+            국밥
+          </option>
+
+          <option value="카페">
+            카페
+          </option>
+
+          <option value="편의점">
+            편의점
+          </option>
+
+        </select>
+
+      </div>
+
+      <div class="field">
+
+        <label
+          class="title"
+          for="budget"
+        >
+          1인 예산
+        </label>
+
+        <select id="budget">
+
+          <option value="999999">
+            상관없음
+          </option>
+
+          <option value="3000">
+            3,000원 이하
+          </option>
+
+          <option value="5000">
+            5,000원 이하
+          </option>
+
+          <option value="7000">
+            7,000원 이하
+          </option>
+
+          <option value="10000">
+            10,000원 이하
+          </option>
+
+        </select>
+
+      </div>
+
+      <div class="field">
+
+        <label
+          class="title"
+          for="priority"
+        >
+          추천 기준
+        </label>
+
+        <select id="priority">
+
+          <option value="balanced">
+            거리·가격 균형
+          </option>
+
+          <option value="distance">
+            가까운 곳 우선
+          </option>
+
+          <option value="price">
+            저렴한 곳 우선
+          </option>
+
+          <option value="parking">
+            주차 편의 우선
+          </option>
+
+        </select>
+
+      </div>
+
+      <button id="recommendBtn">
+        조건에 맞는 장소 추천
+      </button>
+
+      <div
+        class="field"
+        style="margin-top:17px"
+      >
+
+        <label class="title">
+          여러 장소 방문
+        </label>
+
+        <div
+          class="checks"
+          id="restaurantChecks"
+        ></div>
+
+      </div>
+
+      <button id="calcBtn">
+        선택 장소 방문 경로 계산
+      </button>
+
+      <button
+        class="secondary"
+        id="resetBtn"
+      >
+        경로 초기화
+      </button>
+
+      <div
+        class="result"
+        id="result"
+      >
+
+        <div class="result-card">
+
+          <strong>
+            사용 방법
+          </strong>
+
+          <div class="meta">
+            조건을 설정해 맛집을 추천받거나,
+            여러 장소를 선택해 실제 도로를 따라가는
+            방문 순서를 계산할 수 있습니다.
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="note">
+        교차로를 노드로, 도로를 간선으로 변환한 뒤
+        다익스트라 알고리즘으로 실제 도로상의
+        최단경로를 계산합니다.
+      </div>
+
+    </aside>
+
+  </main>
+
+  <script>
+
+    
+    /* =====================================================
+   1. 기본 설정
+   ===================================================== */
+
+const SETTINGS = {
+  // 보행 속도: 시속 5km 기준
+  walkingSpeedKmH: 5,
+
+  // 지도 좌표 거리를 실제 거리로 환산할 때 사용하는 값
+  // 나중에 실제 거리와 차이가 크면 수정 가능
+  coordinateToMeter: 18
+};
+
+
+/* =====================================================
+   2. 장소 정보
+   x가 커질수록 오른쪽
+   y가 커질수록 아래쪽
+   ===================================================== */
+
+const places = {
+
+  /* 출발지 */
+
+  school: {
+    name: "세종고등학교",
+    type: "start",
+    x: 15,
+    y: 55,
+
+    // 가장 가까운 교차로
+    node: "n1"
+  },
+
+
+  /* 음식점 및 편의점 */
+
+  r1: {
+    name: "금송중식당",
+    type: "food",
+    x: 51,
+    y: 2,
+
+    category: "중식",
+    minPrice: 4500,
+    parkingScore: 3,
+
+    menu: [
+      "자장면 4,500원",
+      "간짜장 6,500원",
+      "우동 6,000원",
+      "짬뽕 6,000원",
+      "볶음밥 6000",
+      "잡채밥 7000",
+      "미니탕수육 10,000",
+      "칠리 새우 20,000",
+      "V8 20,700"
+    ],
+
+    parking: "공영주차장",
+    node: "n4"
+  },
+
+  r2: {
+    name: "이마트24 편의점",
+    type: "food",
+    x: 49,
+    y: 12,
+
+    category: "편의점",
+    minPrice: 1000,
+    parkingScore: 4,
+
+    menu: [
+      "삼각김밥",
+      "도시락",
+      "컵라면",
+    ],
+
+    parking: "공영주차장",
+    node: "n4"
+  },
+
+  r3: {
+    name: "CU 편의점",
+    type: "food",
+    x: 75,
+    y: 18,
+
+    category: "편의점",
+    minPrice: 1000,
+    parkingScore: 3,
+
+    menu: [
+      "삼각김밥",
+      "도시락",
+      "컵라면",
+    ],
+
+    parking: "공영주차장",
+    node: "n6"
+  },
+
+  r4: {
+    name: "중앙반점",
+    type: "food",
+    x: 80,
+    y: 25,
+
+    category: "중식",
+    minPrice: 6000,
+    parkingScore: 4,
+
+    menu: [
+      "자장 6,000원",
+      "간짜장 7,000원",
+      "우동 6,000원",
+      "짬뽕 7,000원",
+      "탕수육 15,000원",
+      "잡채밥 7,000"
+    ],
+
+    parking: "공영노상주차장",
+    node: "n7"
+  },
+
+  r5: {
+    name: "쩡스분식",
+    type: "food",
+    x: 52,
+    y: 48,
+
+    category: "분식",
+    minPrice: 800,
+    parkingScore: 4,
+
+    menu: [
+      "김밥 3,500원",
+      "참치김밥 4,800원",
+      "떡볶이 4,000원",
+      "순대 5,000원",
+      "라면 5,000원",
+      "새우튀김 1,500원",
+      "해쉬브라운 1,000원",
+      "김말이 800원",
+      "고추튀김 1,500원",
+      "고구마 튀김 1,200원",
+      "피카츄돈가스 3,000원",
+      "군만두 800원",
+      "치즈스틱 800원",
+      "구운계란 800원",
+      "오징어튀김 2,000원",
+      "음료 2,000원"
+    ],
+
+    parking: "공영노상주차장",
+    node: "n10"
+  },
+
+  r6: {
+    name: "동래밀면",
+    type: "food",
+    x: 50,
+    y: 58,
+
+    category: "면요리",
+    minPrice: 6000,
+    parkingScore: 2,
+
+    menu: [
+      "물밀면 8,000원",
+      "비빔밀면 9,000원",
+      "회밀면 10,000원",
+      "갈비탕 12,000원",
+      "한우소국밥 9,000원",
+      "고기추가 6,000원",
+      "만두 6,000원",
+      "가오리무침 15,000원",
+      "소물고기전골 12,000원"
+    ],
+
+    parking: "탑마트 주차장",
+    node: "n12"
+  },
+
+  r7: {
+    name: "하삼동커피",
+    type: "food",
+    x: 42,
+    y: 58,
+
+    category: "카페",
+    minPrice: 2300,
+    parkingScore: 2,
+
+    menu: [
+      "아메리카노 2,300원",
+      "카페라떼 3,200원",
+      "다방커피 2,900원",
+      "바닐라라떼 3,600원",
+      "카라메라떼 3,500원",
+      "카라멜마끼아또 3,900원",
+      "카페모카 4,100원",
+      "초코라떼 4,000원",
+      "딸기라떼 4,000원",
+      "녹차라떼 4,000원",
+      "버블티류 4,800원",
+      "자몽허니블랙티 4,200원"
+      
+    ],
+
+    parking: "탑마트 주차장",
+    node: "n12"
+  },
+
+  r8: {
+    name: "GS25 편의점",
+    type: "food",
+    x: 58,
+    y: 53,
+
+    category: "편의점",
+    minPrice: 1000,
+    parkingScore: 4,
+
+    menu: [
+      "삼각김밥",
+      "도시락",
+      "컵라면",
+    ],
+
+    parking: "공영노상주차장",
+    node: "n9"
+  },
+
+  r9: {
+    name: "계성국밥",
+    type: "food",
+    x: 53,
+    y: 67,
+
+    category: "국밥",
+    minPrice: 9000,
+    parkingScore: 4,
+
+    menu: [
+      "돼지국밥 9,000원",
+      "순대국밥 9,000원",
+      "내장국밥 9,000원",
+      "섞어국밥 9,000원",
+      "수육中 35,000원"
+    ],
+
+    parking: "공영노상주차장",
+    node: "n11"
+  },
+
+  r10: {
+    name: "텐퍼센트커피",
+    type: "food",
+    x: 55,
+    y: 63,
+
+    category: "카페",
+    minPrice: 2000,
+    parkingScore: 4,
+
+    menu: [
+      "아메리카노 2,000원",
+      "카페라떼 3,500원",
+      "카페모카 4,800원",
+      "바닐라라떼 4,000원",
+      "밀크카라멜라떼 4,500원",
+      "말차라떼 4,000원",
+      "피치아이스티 3,300원",
+      "밀크티 4,300원"
+    ],
+
+    parking: "공영노상주차장",
+    node: "n9"
+  },
+
+
+  /* 주차장 */
+
+  p1: {
+    name: "공영주차장",
+    type: "parking",
+    x: 63,
+    y: 30,
+    node: "n5"
+  },
+
+  p2: {
+    name: "탑마트 주차장",
+    type: "parking",
+    x: 35,
+    y: 70,
+    node: "n11"
+  },
+
+  p3: {
+    name: "공영노상주차장",
+    type: "parking",
+    x: 54,
+    y: 58,
+    node: "n9"
+  }
+
+};
+
+
+/* =====================================================
+   3. 교차로 좌표
+
+   네가 지도에 적은 1~12번을 기준으로 작성함.
+   위치가 살짝 다르면 x, y 숫자만 수정하면 됨.
+   ===================================================== */
+
+const nodes = {
+
+  n1: {
+    name: "교차로 1",
+    type: "node",
+    x: 19,
+    y: 68
+  },
+
+  n2: {
+    name: "교차로 2",
+    type: "node",
+    x: 40,
+    y: 39
+  },
+
+  n3: {
+    name: "교차로 3",
+    type: "node",
+    x: 46,
+    y: 29
+  },
+
+  n4: {
+    name: "교차로 4",
+    type: "node",
+    x: 56,
+    y: 13
+  },
+
+  n5: {
+    name: "교차로 5",
+    type: "node",
+    x: 65,
+    y: 26
+  },
+
+  n6: {
+    name: "교차로 6",
+    type: "node",
+    x: 70,
+    y: 27
+  },
+
+  n7: {
+    name: "교차로 7",
+    type: "node",
+    x: 78,
+    y: 35
+  },
+
+  n8: {
+    name: "교차로 8",
+    type: "node",
+    x: 67,
+    y: 67
+  },
+
+  n9: {
+    name: "교차로 9",
+    type: "node",
+    x: 58,
+    y: 57
+  },
+
+  n10: {
+    name: "교차로 10",
+    type: "node",
+    x: 54,
+    y: 51
+  },
+
+  n11: {
+    name: "교차로 11",
+    type: "node",
+    x: 48,
+    y: 64
+  },
+
+  n12: {
+    name: "교차로 12",
+    type: "node",
+    x: 46,
+    y: 58
+  }
+
+};
+
+
+/* =====================================================
+   4. 실제 도로 연결 정보
+
+   형식:
+   ["출발 노드", "도착 노드", 거리(m)]
+
+   실제 거리를 모르는 구간은 지도 비율을 보고
+   임시 거리값을 넣은 상태임.
+   ===================================================== */
+
+const roads = [
+
+  /* 학교 앞 도로 */
+
+  ["n1", "n2", 210],
+
+  ["n2", "n3", 120],
+
+  ["n3", "n4", 170],
+
+
+  /* 북쪽 및 중앙 도로 */
+
+  ["n4", "n5", 160],
+
+  ["n5", "n6", 80],
+
+  ["n6", "n7", 110],
+
+
+  /* 오른쪽 도로 */
+
+  ["n7", "n8", 250],
+
+  ["n8", "n9", 130],
+
+
+  /* 음식점 밀집 구역 */
+
+  ["n9", "n10", 80],
+
+  ["n10", "n11", 100],
+
+  ["n11", "n12", 90],
+
+  ["n12", "n3", 200],
+
+
+  /* 중앙 대로 연결 */
+
+  ["n5", "n10", 230],
+
+  ["n10", "n12", 70],
+
+  ["n12", "n9", 100],
+
+  ["n11", "n9", 120]
+
+];
+
+
+/* =====================================================
+   5. 지도에 표시할 전체 좌표 합치기
+   ===================================================== */
+
+const mapPoints = {
+  ...places,
+  ...nodes
+};
+
+
+/* =====================================================
+   6. 도로 그래프 자동 생성
+
+   roads에 적은 양방향 도로를
+   다익스트라 알고리즘에서 사용할 형태로 변환함.
+   ===================================================== */
+
+const graph = {};
+
+function addGraphEdge(from, to, distance) {
+
+  if (!graph[from]) {
+    graph[from] = [];
+  }
+
+  graph[from].push({
+    to: to,
+    distance: distance
+  });
+
+}
+
+
+roads.forEach(([from, to, distance]) => {
+
+  // from → to
+  addGraphEdge(from, to, distance);
+
+  // to → from
+  addGraphEdge(to, from, distance);
+
+});
+
+
+/* =====================================================
+   7. 장소와 가장 가까운 교차로 연결
+
+   음식점과 주차장을 도로망에 연결함.
+   거리 20m는 교차로에서 건물 입구까지의 임시 거리.
+   ===================================================== */
+
+Object.entries(places).forEach(([placeId, place]) => {
+
+  if (!place.node) {
+    return;
+  }
+
+  addGraphEdge(
+    placeId,
+    place.node,
+    20
+  );
+
+  addGraphEdge(
+    place.node,
+    placeId,
+    20
+  );
+
+});
+/* =====================================================
+   8. HTML 요소 가져오기
+   ===================================================== */
+
+const mapWrap = document.getElementById("mapWrap");
+const roadLayer = document.getElementById("roadLayer");
+const routeLine = document.getElementById("routeLine");
+
+const restaurantChecks =
+  document.getElementById("restaurantChecks");
+
+const resultBox =
+  document.getElementById("result");
+
+const recommendButton =
+  document.getElementById("recommendBtn");
+
+const calculateButton =
+  document.getElementById("calcBtn");
+
+const resetButton =
+  document.getElementById("resetBtn");
+
+
+/* =====================================================
+   9. 지도 좌표를 SVG 좌표로 변환
+
+   지도에서 x, y는 0~100의 비율값이고,
+   SVG는 가로 1000, 세로 625를 사용함.
+   ===================================================== */
+
+function convertToSvgPoint(point) {
+
+  return {
+    x: point.x * 10,
+    y: point.y * 6.25
+  };
+
+}
+
+
+/* =====================================================
+   10. 지도 마커 생성
+   ===================================================== */
+
+function createMarker(id, place) {
+
+  const marker =
+    document.createElement("div");
+
+  marker.className =
+    `marker ${place.type}`;
+
+  marker.style.left =
+    `${place.x}%`;
+
+  marker.style.top =
+    `${place.y}%`;
+
+  if (place.type === "start") {
+    marker.textContent = "S";
+  }
+
+  else if (place.type === "parking") {
+    marker.textContent = "P";
+  }
+
+  else if (place.type === "node") {
+    marker.textContent =
+      id.replace("n", "");
+  }
+
+  else {
+    marker.textContent = "●";
+  }
+
+  marker.title = place.name;
+
+  marker.addEventListener(
+    "click",
+    function () {
+
+      showPlaceInformation(id);
+
+    }
+  );
+
+  mapWrap.appendChild(marker);
+
+}
+
+
+/* =====================================================
+   11. 장소 마커 지도에 표시
+
+   교차로 번호를 숨기고 싶다면
+   SHOW_NODE_MARKERS를 false로 변경
+   ===================================================== */
+
+const SHOW_NODE_MARKERS = false;
+
+Object.entries(mapPoints).forEach(
+  ([id, place]) => {
+
+    if (
+      place.type === "node" &&
+      SHOW_NODE_MARKERS === false
+    ) {
+      return;
+    }
+
+    createMarker(id, place);
+
+  }
+);
+
+
+/* =====================================================
+   12. 지도에 전체 도로 표시
+   ===================================================== */
+
+/*function drawAllRoads() {
+
+  roads.forEach(
+    ([fromId, toId]) => {
+
+      const fromPoint =
+        convertToSvgPoint(
+          mapPoints[fromId]
+        );
+
+      const toPoint =
+        convertToSvgPoint(
+          mapPoints[toId]
+        );
+
+      const road =
+        document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "line"
+        );
+
+      road.setAttribute(
+        "x1",
+        fromPoint.x
+      );
+
+      road.setAttribute(
+        "y1",
+        fromPoint.y
+      );
+
+      road.setAttribute(
+        "x2",
+        toPoint.x
+      );
+
+      road.setAttribute(
+        "y2",
+        toPoint.y
+      );
+
+      road.setAttribute(
+        "class",
+        "road-line"
+      );
+
+      roadLayer.appendChild(road);
+
+    }
+  );
+
+}
+
+drawAllRoads();
+
+
+/* =====================================================
+   13. 다익스트라 알고리즘
+
+   출발지부터 목적지까지
+   실제 도로를 따라 최단거리를 계산함.
+   ===================================================== */
+
+function dijkstra(startId, endId) {
+
+  const distances = {};
+  const previous = {};
+
+  const unvisited =
+    new Set(
+      Object.keys(graph)
+    );
+
+  Object.keys(graph).forEach(
+    nodeId => {
+
+      distances[nodeId] =
+        Infinity;
+
+      previous[nodeId] =
+        null;
+
+    }
+  );
+
+  distances[startId] = 0;
+
+
+  while (unvisited.size > 0) {
+
+    let currentNode = null;
+
+
+    unvisited.forEach(
+      nodeId => {
+
+        if (
+          currentNode === null ||
+          distances[nodeId] <
+          distances[currentNode]
+        ) {
+
+          currentNode = nodeId;
+
+        }
+
+      }
+    );
+
+
+    if (
+      currentNode === null ||
+      distances[currentNode] === Infinity
+    ) {
+
+      break;
+
+    }
+
+
+    if (currentNode === endId) {
+      break;
+    }
+
+
+    unvisited.delete(currentNode);
+
+
+    const connectedRoads =
+      graph[currentNode] || [];
+
+
+    connectedRoads.forEach(
+      edge => {
+
+        if (
+          !unvisited.has(edge.to)
+        ) {
+          return;
+        }
+
+
+        const newDistance =
+          distances[currentNode] +
+          edge.distance;
+
+
+        if (
+          newDistance <
+          distances[edge.to]
+        ) {
+
+          distances[edge.to] =
+            newDistance;
+
+          previous[edge.to] =
+            currentNode;
+
+        }
+
+      }
+    );
+
+  }
+
+
+  if (
+    distances[endId] === Infinity
+  ) {
+
+    return {
+      distance: Infinity,
+      path: []
+    };
+
+  }
+
+
+  const path = [];
+
+  let current = endId;
+
+
+  while (current !== null) {
+
+    path.unshift(current);
+
+    current =
+      previous[current];
+
+  }
+
+
+  return {
+    distance:
+      distances[endId],
+
+    path: path
+  };
+
+}
+
+
+/* =====================================================
+   14. 계산된 최단경로를 지도에 표시
+   ===================================================== */
+
+function drawRoute(path) {
+
+  if (
+    !Array.isArray(path) ||
+    path.length === 0
+  ) {
+
+    routeLine.setAttribute(
+      "points",
+      ""
+    );
+
+    return;
+
+  }
+
+
+  const points = path.map(
+    pointId => {
+
+      const point =
+        convertToSvgPoint(
+          mapPoints[pointId]
+        );
+
+      return `${point.x},${point.y}`;
+
+    }
+  );
+
+
+  routeLine.setAttribute(
+    "points",
+    points.join(" ")
+  );
+
+}
+
+
+/* =====================================================
+   15. 도보 예상시간 계산
+   ===================================================== */
+
+function calculateWalkingMinutes(distanceMeter) {
+
+  const meterPerMinute =
+    (
+      SETTINGS.walkingSpeedKmH *
+      1000
+    ) / 60;
+
+
+  return Math.ceil(
+    distanceMeter /
+    meterPerMinute
+  );
+
+}
+
+
+/* =====================================================
+   16. 장소 정보 표시
+   ===================================================== */
+
+function showPlaceInformation(placeId) {
+
+  const place =
+    places[placeId];
+
+  if (!place) {
+    return;
+  }
+
+
+  let html = `
+
+    <div class="result-card">
+
+      <strong>
+        ${place.name}
+      </strong>
+
+      <div class="meta">
+
+        ${
+          place.category ||
+          (
+            place.type === "parking"
+              ? "주차장"
+              : "출발지"
+          )
+        }
+
+      </div>
+
+  `;
+
+
+  if (
+    Array.isArray(place.menu) &&
+    place.menu.length > 0
+  ) {
+
+    html += `
+
+      <div class="menu">
+
+        ${
+          place.menu.map(
+            item => `• ${item}`
+          ).join("<br>")
+        }
+
+      </div>
+
+    `;
+
+  }
+
+
+  if (place.parking) {
+
+    html += `
+
+      <div
+        class="meta"
+        style="margin-top:9px"
+      >
+
+        근처 주차장:
+        ${place.parking}
+
+      </div>
+
+    `;
+
+  }
+
+
+  if (
+    placeId !== "school"
+  ) {
+
+    const routeResult =
+      dijkstra(
+        "school",
+        placeId
+      );
+
+
+    if (
+      routeResult.path.length > 0
+    ) {
+
+      const walkingMinutes =
+        calculateWalkingMinutes(
+          routeResult.distance
+        );
+
+
+      html += `
+
+        <div
+          class="meta"
+          style="margin-top:9px"
+        >
+
+          세종고등학교 기준<br>
+
+          도로 거리:
+          약 ${routeResult.distance}m<br>
+
+          예상 도보시간:
+          약 ${walkingMinutes}분
+
+        </div>
+
+        <button
+          class="secondary"
+          style="margin-top:10px"
+          onclick="showSingleRoute('${placeId}')"
+        >
+
+          이곳까지 경로 보기
+
+        </button>
+
+      `;
+
+    }
+
+  }
+
+
+  html += "</div>";
+
+  resultBox.innerHTML = html;
+
+}
+
+
+/* =====================================================
+   17. 특정 장소까지 경로 표시
+   ===================================================== */
+
+function showSingleRoute(placeId) {
+
+  const routeResult =
+    dijkstra(
+      "school",
+      placeId
+    );
+
+
+  if (
+    routeResult.path.length === 0
+  ) {
+
+    alert(
+      "해당 장소까지 연결된 도로가 없습니다."
+    );
+
+    return;
+
+  }
+
+
+  drawRoute(
+    routeResult.path
+  );
+
+
+  const destination =
+    places[placeId];
+
+
+  const walkingMinutes =
+    calculateWalkingMinutes(
+      routeResult.distance
+    );
+
+
+  resultBox.innerHTML = `
+
+    <div class="result-card">
+
+      <strong>
+        ${destination.name}
+      </strong>
+
+      <div class="meta">
+
+        실제 도로 기준 최단거리:
+        약 ${routeResult.distance}m
+
+        <br>
+
+        예상 도보시간:
+        약 ${walkingMinutes}분
+
+      </div>
+
+      ${
+        destination.menu
+          ? `
+
+            <div class="menu">
+
+              ${
+                destination.menu.map(
+                  item => `• ${item}`
+                ).join("<br>")
+              }
+
+            </div>
+
+          `
+          : ""
+      }
+
+      ${
+        destination.parking
+          ? `
+
+            <div
+              class="meta"
+              style="margin-top:9px"
+            >
+
+              근처 주차장:
+              ${destination.parking}
+
+            </div>
+
+          `
+          : ""
+      }
+
+    </div>
+
+  `;
+
+}
+
+
+/* HTML 버튼에서도 호출할 수 있도록 설정 */
+
+window.showSingleRoute =
+  showSingleRoute;
+
+window.showPlaceInformation =
+  showPlaceInformation;
+
+
+/* =====================================================
+   18. 맛집 선택 체크박스 생성
+   ===================================================== */
+
+Object.entries(places)
+  .filter(
+    ([id, place]) =>
+      place.type === "food"
+  )
+  .forEach(
+    ([id, place]) => {
+
+      const label =
+        document.createElement("label");
+
+      label.className =
+        "check-item";
+
+      label.innerHTML = `
+
+        <input
+          type="checkbox"
+          value="${id}"
+        >
+
+        <span>
+          ${place.name}
+        </span>
+
+      `;
+
+      restaurantChecks.appendChild(
+        label
+      );
+
+    }
+  );
+
+
+/* =====================================================
+   19. 추천 점수 계산
+
+   점수가 작을수록 추천 순위가 높음.
+   ===================================================== */
+
+function calculateRecommendationScore(
+  placeId,
+  priority
+) {
+
+  const place =
+    places[placeId];
+
+
+  const routeResult =
+    dijkstra(
+      "school",
+      placeId
+    );
+
+
+  const distance =
+    routeResult.distance;
+
+
+  if (distance === Infinity) {
+    return Infinity;
+  }
+
+
+  if (
+    priority === "distance"
+  ) {
+
+    return distance;
+
+  }
+
+
+  if (
+    priority === "price"
+  ) {
+
+    return (
+      place.minPrice +
+      distance * 2
+    );
+
+  }
+
+
+  if (
+    priority === "parking"
+  ) {
+
+    return (
+      distance -
+      place.parkingScore * 150
+    );
+
+  }
+
+
+  /* 거리·가격·주차 균형 */
+
+  return (
+
+    distance * 1.2 +
+
+    place.minPrice * 0.15 -
+
+    place.parkingScore * 100
+
+  );
+
+}
+
+
+/* =====================================================
+   20. 조건 기반 맛집 추천
+   ===================================================== */
+
+recommendButton.addEventListener(
+  "click",
+  function () {
+
+    const selectedCategory =
+      document.getElementById(
+        "category"
+      ).value;
+
+
+    const selectedBudget =
+      Number(
+        document.getElementById(
+          "budget"
+        ).value
+      );
+
+
+    const selectedPriority =
+      document.getElementById(
+        "priority"
+      ).value;
+
+
+    let candidates =
+      Object.entries(places)
+
+        .filter(
+          ([id, place]) =>
+            place.type === "food"
+        )
+
+        .filter(
+          ([id, place]) =>
+
+            selectedCategory === "전체" ||
+
+            place.category ===
+            selectedCategory
+
+        )
+
+        .filter(
+          ([id, place]) =>
+
+            place.minPrice <=
+            selectedBudget
+
+        )
+
+        .map(
+          ([id, place]) => {
+
+            const routeResult =
+              dijkstra(
+                "school",
+                id
+              );
+
+
+            return {
+              id: id,
+              place: place,
+
+              score:
+                calculateRecommendationScore(
+                  id,
+                  selectedPriority
+                ),
+
+              distance:
+                routeResult.distance,
+
+              path:
+                routeResult.path
+            };
+
+          }
+        )
+
+        .filter(
+          item =>
+            item.distance !== Infinity
+        )
+
+        .sort(
+          (a, b) =>
+            a.score - b.score
+        );
+
+
+    if (
+      candidates.length === 0
+    ) {
+
+      routeLine.setAttribute(
+        "points",
+        ""
+      );
+
+
+      resultBox.innerHTML = `
+
+        <div class="result-card">
+
+          <strong>
+            추천 결과 없음
+          </strong>
+
+          <div class="meta">
+
+            선택한 음식 종류와
+            예산 조건을 만족하는
+            장소가 없습니다.
+
+          </div>
+
+        </div>
+
+      `;
+
+      return;
+
+    }
+
+
+    const topResults =
+      candidates.slice(0, 3);
+
+
+    /* 1순위 추천 경로 지도에 표시 */
+
+    drawRoute(
+      topResults[0].path
+    );
+
+
+    const priorityText =
+      document.getElementById(
+        "priority"
+      ).selectedOptions[0].text;
+
+
+    resultBox.innerHTML = `
+
+      <div class="result-card">
+
+        <strong>
+
+          맞춤 추천 결과
+
+          <span class="badge">
+            TOP ${topResults.length}
+          </span>
+
+        </strong>
+
+        <div class="meta">
+
+          추천 기준:
+          ${priorityText}
+
+        </div>
+
+      </div>
+
+      ${
+        topResults.map(
+          (item, index) => {
+
+            const place =
+              item.place;
+
+
+            const walkingMinutes =
+              calculateWalkingMinutes(
+                item.distance
+              );
+
+
+            return `
+
+              <div class="result-card">
+
+                <strong>
+
+                  ${index + 1}순위 ·
+                  ${place.name}
+
+                </strong>
+
+                <div class="meta">
+
+                  ${place.category}
+
+                  · 최저가
+                  ${place.minPrice.toLocaleString()}원
+
+                  <br>
+
+                  도로 거리:
+                  약 ${item.distance}m
+
+                  <br>
+
+                  예상 도보시간:
+                  약 ${walkingMinutes}분
+
+                  <br>
+
+                  주차 편의 점수:
+                  ${place.parkingScore}/5
+
+                </div>
+
+                <div class="menu">
+
+                  ${
+                    place.menu.map(
+                      menu =>
+                        `• ${menu}`
+                    ).join("<br>")
+                  }
+
+                </div>
+
+                <div
+                  class="meta"
+                  style="margin-top:9px"
+                >
+
+                  근처 주차장:
+                  ${place.parking}
+
+                </div>
+
+                <button
+                  class="secondary"
+                  style="margin-top:10px"
+                  onclick="
+                    showSingleRoute(
+                      '${item.id}'
+                    )
+                  "
+                >
+
+                  이곳 경로 보기
+
+                </button>
+
+              </div>
+
+            `;
+
+          }
+        ).join("")
+      }
+
+    `;
+
+  }
+);
+
+
+/* =====================================================
+   21. 두 장소 사이 도로 거리 계산
+   ===================================================== */
+
+function getRoadDistance(
+  fromId,
+  toId
+) {
+
+  const result =
+    dijkstra(
+      fromId,
+      toId
+    );
+
+
+  return result.distance;
+
+}
+
+
+/* =====================================================
+   22. 여러 맛집 방문 순서 계산
+
+   현재 위치에서 가장 가까운
+   다음 장소를 선택하는
+   최근접 이웃 방식 사용.
+   ===================================================== */
+
+function calculateVisitOrder(
+  startId,
+  selectedIds
+) {
+
+  const remaining =
+    [...selectedIds];
+
+
+  const visitOrder =
+    [startId];
+
+
+  let currentId =
+    startId;
+
+
+  while (
+    remaining.length > 0
+  ) {
+
+    let closestId = null;
+
+    let closestDistance =
+      Infinity;
+
+
+    remaining.forEach(
+      candidateId => {
+
+        const candidateDistance =
+          getRoadDistance(
+            currentId,
+            candidateId
+          );
+
+
+        if (
+          candidateDistance <
+          closestDistance
+        ) {
+
+          closestDistance =
+            candidateDistance;
+
+          closestId =
+            candidateId;
+
+        }
+
+      }
+    );
+
+
+    if (
+      closestId === null
+    ) {
+
+      break;
+
+    }
+
+
+    visitOrder.push(
+      closestId
+    );
+
+
+    remaining.splice(
+      remaining.indexOf(
+        closestId
+      ),
+      1
+    );
+
+
+    currentId =
+      closestId;
+
+  }
+
+
+  return visitOrder;
+
+}
+
+
+/* =====================================================
+   23. 여러 구간 경로를 하나로 합치기
+   ===================================================== */
+
+function combineRoutePaths(
+  visitOrder
+) {
+
+  let completePath = [];
+
+  let totalDistance = 0;
+
+
+  for (
+    let index = 1;
+    index < visitOrder.length;
+    index++
+  ) {
+
+    const fromId =
+      visitOrder[index - 1];
+
+    const toId =
+      visitOrder[index];
+
+
+    const routeResult =
+      dijkstra(
+        fromId,
+        toId
+      );
+
+
+    totalDistance +=
+      routeResult.distance;
+
+
+    if (
+      completePath.length === 0
+    ) {
+
+      completePath.push(
+        ...routeResult.path
+      );
+
+    }
+
+    else {
+
+      /*
+        앞 구간의 마지막 노드와
+        다음 구간의 첫 노드가 중복되므로
+        첫 번째 항목은 제외함.
+      */
+
+      completePath.push(
+        ...routeResult.path.slice(1)
+      );
+
+    }
+
+  }
+
+
+  return {
+    path: completePath,
+    distance: totalDistance
+  };
+
+}
+
+
+/* =====================================================
+   24. 여러 장소 방문 버튼
+   ===================================================== */
+
+calculateButton.addEventListener(
+  "click",
+  function () {
+
+    const selectedPlaces = [
+
+      ...document.querySelectorAll(
+        ".check-item input:checked"
+      )
+
+    ].map(
+      checkbox =>
+        checkbox.value
+    );
+
+
+    if (
+      selectedPlaces.length === 0
+    ) {
+
+      alert(
+        "방문할 장소를 한 곳 이상 선택해 주세요."
+      );
+
+      return;
+
+    }
+
+
+    const visitOrder =
+      calculateVisitOrder(
+        "school",
+        selectedPlaces
+      );
+
+
+    const combinedRoute =
+      combineRoutePaths(
+        visitOrder
+      );
+
+
+    drawRoute(
+      combinedRoute.path
+    );
+
+
+    const walkingMinutes =
+      calculateWalkingMinutes(
+        combinedRoute.distance
+      );
+
+
+    resultBox.innerHTML = `
+
+      <div class="result-card">
+
+        <strong>
+
+          추천 방문 순서
+
+          <span class="badge">
+            도로 기반 경로
+          </span>
+
+        </strong>
+
+        <ol class="route-list">
+
+          ${
+            visitOrder.map(
+              placeId => `
+
+                <li>
+                  ${places[placeId].name}
+                </li>
+
+              `
+            ).join("")
+          }
+
+        </ol>
+
+        <div
+          class="meta"
+          style="margin-top:9px"
+        >
+
+          총 도로 거리:
+          약 ${combinedRoute.distance}m
+
+          <br>
+
+          예상 이동시간:
+          약 ${walkingMinutes}분
+
+          <br>
+
+          방문 장소 수:
+          ${selectedPlaces.length}곳
+
+        </div>
+
+      </div>
+
+      ${
+        selectedPlaces.map(
+          placeId => {
+
+            const place =
+              places[placeId];
+
+
+            return `
+
+              <div class="result-card">
+
+                <strong>
+                  ${place.name}
+                </strong>
+
+                <div class="meta">
+
+                  ${place.category}
+
+                  · 최저가
+
+                  ${place.minPrice.toLocaleString()}원
+
+                  <br>
+
+                  근처 주차장:
+                  ${place.parking}
+
+                </div>
+
+                <div class="menu">
+
+                  ${
+                    place.menu.map(
+                      item =>
+                        `• ${item}`
+                    ).join("<br>")
+                  }
+
+                </div>
+
+              </div>
+
+            `;
+
+          }
+        ).join("")
+      }
+
+    `;
+
+  }
+);
+
+
+/* =====================================================
+   25. 초기화 버튼
+   ===================================================== */
+
+resetButton.addEventListener(
+  "click",
+  function () {
+
+    document
+      .querySelectorAll(
+        ".check-item input"
+      )
+      .forEach(
+        checkbox => {
+
+          checkbox.checked =
+            false;
+
+        }
+      );
+
+
+    routeLine.setAttribute(
+      "points",
+      ""
+    );
+
+
+    resultBox.innerHTML = `
+
+      <div class="result-card">
+
+        <strong>
+          사용 방법
+        </strong>
+
+        <div class="meta">
+
+          조건을 설정해 장소를 추천받거나,
+          여러 장소를 선택해 실제 도로를
+          따라가는 방문 경로를 계산할 수 있습니다.
+
+        </div>
+
+      </div>
+
+    `;
+
+  }
+);
+
+
+/* =====================================================
+   26. 시작 화면에서 학교 정보 표시
+   ===================================================== */
+
+showPlaceInformation("school");
+  </script>
+
+</body>
+</html>
